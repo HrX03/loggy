@@ -1,0 +1,28 @@
+name: loggy
+description: A new flutter plugin project.
+version: 0.0.1+1
+author: Davide Bianco
+homepage: https://github.com/HrX03/logger
+
+environment:
+  sdk: ">=2.7.0 <3.0.0"
+  flutter: ">=1.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  intl:
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: hrx.loggy
+        pluginClass: LoggyPlugin
+      ios:
+        pluginClass: LoggyPlugin

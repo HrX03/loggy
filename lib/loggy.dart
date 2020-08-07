@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -13,8 +14,23 @@ class Loggy {
   static bool _generatedAppLabel = false;
   static int _logLevel = 1;
 
+  static bool get _isUnsupportedPlatform {
+    if (kIsWeb) return true;
+
+    if (Platform.isLinux ||
+        Platform.isWindows ||
+        Platform.isMacOS ||
+        Platform.isIOS) return true;
+
+    return false;
+  }
+
   static Future<void> generateAppLabel() async {
-    _appLabel = await _getAppLabel();
+    try {
+      _appLabel = await _getAppLabel();
+    } on MissingPluginException {
+      _appLabel = "Loggy";
+    }
     _generatedAppLabel = true;
   }
 
@@ -70,7 +86,7 @@ class Loggy {
     dynamic message,
     bool secure,
   ]) async {
-    if (!_generatedAppLabel || _appLabel == null)
+    if ((!_generatedAppLabel || _appLabel == null) && !_isUnsupportedPlatform)
       throw ErrorDescription(
         "You should run Logger.generateAppLabel() before you use Logger, it's enough to run it once at the start of your application",
       );
@@ -79,24 +95,28 @@ class Loggy {
 
     if (message == null) throw ArgumentError.notNull('message');
 
-    _registry.add(
-      LogEntry(
-        level: level,
-        tag: tag ?? _appLabel,
-        message: message.toString(),
-        secure: secure,
-      ),
+    LogEntry entry = LogEntry(
+      level: level,
+      tag: tag ?? _appLabel,
+      message: message.toString(),
+      secure: secure,
     );
 
+    _registry.add(entry);
+
     if (kDebugMode && level >= _logLevel) {
-      await _channel.invokeMethod(
-        'log',
-        {
-          'level': level,
-          'tag': tag,
-          'message': message.toString(),
-        },
-      );
+      if (_isUnsupportedPlatform) {
+        print(entry.toString());
+      } else {
+        await _channel.invokeMethod(
+          'log',
+          {
+            'level': level,
+            'tag': tag,
+            'message': message.toString(),
+          },
+        );
+      }
     }
   }
 

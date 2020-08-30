@@ -4,7 +4,7 @@ import UIKit
 public class SwiftLoggyPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "loggy", binaryMessenger: registrar.messenger())
-    let instance = SwiftLoggerPlugin()
+    let instance = SwiftLoggyPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 

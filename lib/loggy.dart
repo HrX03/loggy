@@ -10,7 +10,7 @@ class Loggy {
 
   static final List<LogEntry> _registry = [];
 
-  static String _appLabel;
+  static String? _appLabel;
   static bool _generatedAppLabel = false;
   static int _logLevel = 1;
 
@@ -26,10 +26,14 @@ class Loggy {
   }
 
   static Future<void> generateAppLabel() async {
-    try {
-      _appLabel = await _getAppLabel();
-    } on MissingPluginException {
+    if (_isUnsupportedPlatform) {
       _appLabel = "Loggy";
+    } else {
+      try {
+        _appLabel = await _getAppLabel();
+      } on MissingPluginException {
+        _appLabel = "Loggy";
+      }
     }
     _generatedAppLabel = true;
   }
@@ -39,66 +43,64 @@ class Loggy {
   }
 
   static Future<void> v({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.VERBOSE, tag, message, secure);
 
   static Future<void> d({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.DEBUG, tag, message, secure);
 
   static Future<void> i({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.INFO, tag, message, secure);
 
   static Future<void> w({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.WARN, tag, message, secure);
 
   static Future<void> e({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.ERROR, tag, message, secure);
 
   static Future<void> wtf({
-    String tag,
-    dynamic message,
-    bool secure,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   }) =>
       custom(LogEntry.WTF, tag, message, secure);
 
   static Future<void> custom([
-    int level,
-    String tag,
-    dynamic message,
-    bool secure,
+    int level = LogEntry.DEBUG,
+    String? tag,
+    dynamic? message,
+    bool secure = false,
   ]) async {
-    if ((!_generatedAppLabel || _appLabel == null) && !_isUnsupportedPlatform)
+    if ((!_generatedAppLabel || _appLabel == null))
       throw ErrorDescription(
         "You should run Logger.generateAppLabel() before you use Logger, it's enough to run it once at the start of your application",
       );
 
-    if (level == null) throw ArgumentError.notNull('level');
-
     if (message == null) throw ArgumentError.notNull('message');
 
-    LogEntry entry = LogEntry(
+    LogEntry entry = LogEntry._(
       level: level,
       tag: tag ?? _appLabel,
-      message: message.toString(),
+      message: message!.toString(),
       secure: secure,
     );
 
@@ -122,7 +124,7 @@ class Loggy {
 
   static String dumpRegistry() => _registry.join("\n");
 
-  static Future<String> _getAppLabel() async =>
+  static Future<String?> _getAppLabel() async =>
       _channel.invokeMethod('appLabel');
 }
 
@@ -135,12 +137,12 @@ class LogEntry {
   static const int WTF = 7;
 
   final int level;
-  final String tag;
-  final String message;
+  final String? tag;
+  final String? message;
   final bool secure;
 
-  const LogEntry({
-    this.level,
+  const LogEntry._({
+    this.level = LogEntry.INFO,
     this.tag,
     this.message,
     this.secure = false,
@@ -150,10 +152,10 @@ class LogEntry {
   String toString() {
     String content;
 
-    if (this.secure ?? false)
+    if (this.secure)
       content = "Secure logs can't be dumped";
     else
-      content = this.message;
+      content = this.message ?? "";
 
     String date = DateFormat("MM-dd HH:mm:ss").format(DateTime.now());
 

@@ -1,6 +1,6 @@
 name: loggy
 description: A new flutter plugin project.
-version: 0.0.1+1
+version: 1.0.0+1
 author: Davide Bianco
 homepage: https://github.com/HrX03/logger
 
@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   
-  intl:
+  ansicolor: ^2.0.0-nullsafety.0
 
 dev_dependencies:
   flutter_test:

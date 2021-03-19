@@ -1,150 +1,102 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:ansicolor/ansicolor.dart';
 
 class Loggy {
-  static const MethodChannel _channel = const MethodChannel('loggy');
+  final Map<String, Logger> _loggers = {};
+  LogLevel logLevel = LogLevel.VERBOSE;
 
-  static final List<LogEntry> _registry = [];
+  static final Loggy instance = Loggy._();
+  Loggy._();
 
-  static String? _appLabel;
-  static bool _generatedAppLabel = false;
-  static int _logLevel = 1;
+  static final Logger defaultLogger = Logger("loggy");
+}
 
-  static bool get _isUnsupportedPlatform {
-    if (kIsWeb) return true;
+class Logger {
+  final List<LogEntry> _registry = [];
+  final String tag;
 
-    if (Platform.isLinux ||
-        Platform.isWindows ||
-        Platform.isMacOS ||
-        Platform.isIOS) return true;
+  factory Logger(String tag) {
+    final Logger? _logger = Loggy.instance._loggers[tag];
 
-    return false;
-  }
-
-  static Future<void> generateAppLabel() async {
-    if (_isUnsupportedPlatform) {
-      _appLabel = "Loggy";
+    if (_logger == null) {
+      Loggy.instance._loggers[tag] = Logger._(tag);
+      return Loggy.instance._loggers[tag]!;
     } else {
-      try {
-        _appLabel = await _getAppLabel();
-      } on MissingPluginException {
-        _appLabel = "Loggy";
-      }
+      return _logger;
     }
-    _generatedAppLabel = true;
   }
 
-  static void setLogLevel(int logLevel) {
-    _logLevel = logLevel;
-  }
+  Logger._(this.tag);
 
-  static Future<void> v({
-    String? tag,
-    dynamic? message,
+  Future<void> v(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.VERBOSE, tag, message, secure);
+      custom(message, LogLevel.VERBOSE, secure);
 
-  static Future<void> d({
-    String? tag,
-    dynamic? message,
+  Future<void> d(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.DEBUG, tag, message, secure);
+      custom(message, LogLevel.DEBUG, secure);
 
-  static Future<void> i({
-    String? tag,
-    dynamic? message,
+  Future<void> i(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.INFO, tag, message, secure);
+      custom(message, LogLevel.INFO, secure);
 
-  static Future<void> w({
-    String? tag,
-    dynamic? message,
+  Future<void> w(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.WARN, tag, message, secure);
+      custom(message, LogLevel.WARN, secure);
 
-  static Future<void> e({
-    String? tag,
-    dynamic? message,
+  Future<void> e(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.ERROR, tag, message, secure);
+      custom(message, LogLevel.ERROR, secure);
 
-  static Future<void> wtf({
-    String? tag,
-    dynamic? message,
+  Future<void> wtf(
+    Object? message, {
     bool secure = false,
   }) =>
-      custom(LogEntry.WTF, tag, message, secure);
+      custom(message, LogLevel.WTF, secure);
 
-  static Future<void> custom([
-    int level = LogEntry.DEBUG,
-    String? tag,
-    dynamic? message,
+  Future<void> custom(
+    Object? message, [
+    LogLevel level = LogLevel.DEBUG,
     bool secure = false,
   ]) async {
-    if ((!_generatedAppLabel || _appLabel == null))
-      throw ErrorDescription(
-        "You should run Logger.generateAppLabel() before you use Logger, it's enough to run it once at the start of your application",
-      );
-
-    if (message == null) throw ArgumentError.notNull('message');
-
     LogEntry entry = LogEntry._(
       level: level,
-      tag: tag ?? _appLabel,
-      message: message!.toString(),
+      tag: tag,
+      message: message.toString(),
       secure: secure,
     );
 
     _registry.add(entry);
 
-    if (kDebugMode && level >= _logLevel) {
-      if (_isUnsupportedPlatform) {
-        print(entry.toString());
-      } else {
-        await _channel.invokeMethod(
-          'log',
-          {
-            'level': level,
-            'tag': tag,
-            'message': message.toString(),
-          },
-        );
-      }
+    if (level.index >= Loggy.instance.logLevel.index) {
+      print(entry.toString());
     }
   }
 
-  static String dumpRegistry() => _registry.join("\n");
-
-  static Future<String?> _getAppLabel() async =>
-      _channel.invokeMethod('appLabel');
+  String dump() => _registry.join("\n");
 }
 
 class LogEntry {
-  static const int VERBOSE = 2;
-  static const int DEBUG = 3;
-  static const int INFO = 4;
-  static const int WARN = 5;
-  static const int ERROR = 6;
-  static const int WTF = 7;
-
-  final int level;
-  final String? tag;
-  final String? message;
+  final String message;
+  final String tag;
+  final LogLevel level;
   final bool secure;
 
   const LogEntry._({
-    this.level = LogEntry.INFO,
-    this.tag,
-    this.message,
+    required this.message,
+    required this.tag,
+    this.level = LogLevel.INFO,
     this.secure = false,
   });
 
@@ -155,29 +107,82 @@ class LogEntry {
     if (this.secure)
       content = "Secure logs can't be dumped";
     else
-      content = this.message ?? "";
+      content = this.message;
 
-    String date = DateFormat("MM-dd HH:mm:ss").format(DateTime.now());
+    final String date = _formatDate(DateTime.now());
 
-    return "$date  $_levelToString  $tag: $content";
+    return "$date  ${level.asString}  $tag: $content";
   }
 
-  String get _levelToString {
-    switch (level) {
-      case LogEntry.VERBOSE:
+  String toLogLine() {
+    final String content = this.message;
+
+    final String date = _formatDate(DateTime.now());
+
+    return level.color("$date  ${level.asString}  $tag: $content");
+  }
+
+  String _formatDate(DateTime date) {
+    final String month = _addOptionalZero(date.month).join();
+    final String day = _addOptionalZero(date.day).join();
+    final String hour = _addOptionalZero(date.hour).join();
+    final String minute = _addOptionalZero(date.minute).join();
+    final String second = _addOptionalZero(date.second).join();
+
+    return "$month/$day $hour:$minute:$second";
+  }
+
+  List<String> _addOptionalZero(int param) {
+    final List<String> fromParam = param.toString().split('');
+
+    return [
+      if (fromParam.length == 1) "0",
+      ...fromParam,
+    ];
+  }
+}
+
+enum LogLevel {
+  VERBOSE,
+  DEBUG,
+  INFO,
+  WARN,
+  ERROR,
+  WTF,
+}
+
+extension LogLevelUtils on LogLevel {
+  String get asString {
+    switch (this) {
+      case LogLevel.VERBOSE:
         return "V";
-      case LogEntry.DEBUG:
+      case LogLevel.DEBUG:
         return "D";
-      case LogEntry.INFO:
+      case LogLevel.INFO:
         return "I";
-      case LogEntry.WARN:
+      case LogLevel.WARN:
         return "W";
-      case LogEntry.ERROR:
+      case LogLevel.ERROR:
         return "E";
-      case LogEntry.WTF:
-        return "WTF";
-      default:
-        throw ArgumentError.value(level, 'level');
+      case LogLevel.WTF:
+        return "F";
+    }
+  }
+
+  AnsiPen get color {
+    switch (this) {
+      case LogLevel.VERBOSE:
+        return AnsiPen()..white(bold: true);
+      case LogLevel.DEBUG:
+        return AnsiPen()..green(bold: true);
+      case LogLevel.INFO:
+        return AnsiPen()..blue(bold: true);
+      case LogLevel.WARN:
+        return AnsiPen()..yellow(bold: true);
+      case LogLevel.ERROR:
+        return AnsiPen()..red(bold: true);
+      case LogLevel.WTF:
+        return AnsiPen()..magenta(bold: true);
     }
   }
 }
